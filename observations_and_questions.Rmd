@@ -1,0 +1,153 @@
+---
+title: "Observations and Questions"
+output: 
+  html_document:
+    toc: true
+---
+
+<!-- horizontal scrollbar for code chunks -->
+<!-- source: https://stackoverflow.com/questions/36230790/missing-horizontal-scroll-bar-in-r-markdown-html-code-chunks-and-output -->
+```{css css,echo=FALSE}
+pre,code{white-space:pre!important;overflow-x:auto}
+```
+
+## 1
+
+I couldn't find the value of $v(t,\Delta)$ for constant functions, <br> 
+and I set it to be $0$.
+
+## 2
+
+Based on line 70 of the `TVDMSS()` function at <https://github.com/hhuang90/TVD/blob/master/R/TVD.R>, <br>
+when defining $\tilde{f}_l(s_i,\Delta)$, <br>
+we also set $X_l(t_i):=\tilde{f}_l(s_i,\Delta)$ for $s_i=t_i$ and $X_l(t_{i-1}):=\tilde{f}_l(s_i,\Delta)$ for $s_i=t_i-\Delta$.
+
+Why do we do this instead of keeping $X_l(t_i)=f_l(t_i)$ and $X_l(t_{i-1})=f_l(t_{i-1})$, <br>
+where, if I'm not mistaken, keeping $X_l(t_i)=f_l(t_i)$ and $X_l(t_{i-1})=f(t_{i-1})$ would keep the estimate of $F_X$ constant?
+
+## 3
+
+Based on line 82 of the `TVDMSS()` function at <https://github.com/hhuang90/TVD/blob/master/R/TVD.R>, <br>
+for the pointwise median $f$ of $n$ observations at time point $t$,
+$$
+\begin{align*}
+\mathbb{E}(R_f(t))^2&=(1^2\times\mathbb{P}(R_f(t)=1)+0^2\times\mathbb{P}(R_f(t)=0))^2\\
+&=\mathbb{P}(R_f(t)=1)^2\\
+&=\frac{\frac{\left(\frac{n}{2}\right)^2}{n}}{n}\\
+&=\left(\frac{1}{2}\right)^2,
+\end{align*}
+$$
+which assumes $\mathbb{P}(R_f(t)=1)=\frac{1}{2}$.
+
+Why do we use $\mathbb{P}(R_f(t)=1)=\frac{1}{2}$ instead of the empirical estimate of $\mathbb{P}(R_f(t)=1)$, <br>
+which isn't equal to $\frac{1}{2}$ for odd $n$?
+
+Do we use $\mathbb{P}(R_f(t)=1)=\frac{1}{2}$ everywhere else throughout the computation?
+
+## 4
+
+Based on lines 57, 60, and 90 of the `TVDMSS()` function at <https://github.com/hhuang90/TVD/blob/master/R/TVD.R>, <br>
+$\mathbb{E}(R_{f_j}(t_i))=$`(rank(x=dataMatrix[,i])/n)[j]`, <br>
+where `dataMatrix` consists of $n$ observations at $p$ time points and $f_j(t_i)=$`dataMatrix[j,i]`, <br>
+for $i\in{1,...,p},j\in{1,...,n}$.
+
+However, this doesn't seem to work for time points $t_i$ for which there exists $j_1,j_2,j_1\neq j_2$ such that $f_{j_1}(t_i)=f_{j_2}(t_i)$. Instead, <br>
+$\mathbb{E}(R_{f_j}(t_i))=$`(rank(x=dataMatrix[,i],ties.method="max")/n)[j]` corresponds to the estimation described in the Appendix, <br>
+as the following test illustrates:
+
+```{r 4,results="hold"}
+createERftMatrixOriginal<-function(dataMatrix){
+  n<-nrow(dataMatrix)
+  ERftMatrixModified<-apply(X=dataMatrix,MARGIN=2,FUN=rank)/n
+  return(ERftMatrixModified)
+}
+
+createERftMatrixModified<-function(dataMatrix){
+  n<-nrow(dataMatrix)
+  ERftMatrixOriginal<-apply(X=dataMatrix,MARGIN=2,FUN=rank,ties.method="max")/n
+  return(ERftMatrixOriginal)
+}
+
+(dataMatrix<-matrix(data=c(1:4,1:8),nrow=3,ncol=4,byrow=TRUE))
+(createERftMatrixOriginal(dataMatrix=dataMatrix))
+(createERftMatrixModified(dataMatrix=dataMatrix))
+```
+
+## 5
+
+When detecting outliers using a boxplot, <br>
+why do we use $Q1-factor\times IQR$ as the lowest possible depth value for a non-outlier $f$, <br>
+instead of $Q2-2\times factor\times IQR$, <br>
+where $Q1$ is the first quartile, <br>
+$Q2$ is the median, and <br>
+$IQR$ is the interquartile range of the depth values for all $f$?
+
+Using $Q2-2\times factor\times IQR$ would correspond to:
+
+```{r 5}
+detectOutlierIndicesBoxplotModified<-function(dataMatrix,fMatrix=dataMatrix,depth,factor){
+  depthValuesColumn<-match.fun(FUN=paste("create",depth,"fColumn",sep=""))(dataMatrix=dataMatrix,fMatrix=fMatrix)
+  fiveNumberSummary<-fivenum(x=depthValuesColumn)
+  medianOfDepthValues<-fiveNumberSummary[3]
+  IQROfDepthValues<-fiveNumberSummary[4]-fiveNumberSummary[2]
+  lowerBoundOfNonOutliers<-medianOfDepthValues-factor*IQROfDepthValues
+  outlierIndices<-which(depthValuesColumn<lowerBoundOfNonOutliers)
+  numberOfOutliers<-length(x=outlierIndices)
+  if(0<numberOfOutliers){
+    indicesInIncreasingOrderByDepth<-order(depthValuesColumn)
+    outlierIndicesInIncreasingOrderByDepth<-indicesInIncreasingOrderByDepth[sort(x=match(x=outlierIndices,table=indicesInIncreasingOrderByDepth))]
+  }else{
+    outlierIndicesInIncreasingOrderByDepth<-NULL
+  }
+  return(outlierIndicesInIncreasingOrderByDepth)
+}
+```
+
+## 6
+
+When detecting outliers using the functional boxplot, <br>
+why do we use `pointwiseMinimumOfCentralRegionRow-factor*(pointwiseMaximumOfCentralRegionRow-pointwiseMinimumOfCentralRegionRow)` as the lower fence of non-outliers, and <br>
+`pointwiseMaximumOfCentralRegionRow+factor*(pointwiseMaximumOfCentralRegionRow-pointwiseMinimumOfCentralRegionRow)` as the upper fence of non-outliers, <br>
+instead of choosing curves with a depth value less than $Q2-2\times factor\times IQR$ to be outliers, <br>
+where $Q2$ is the median, and <br>
+$IQR$ is the interquartile range of the depth values for all $f$?
+
+## 7
+
+Based on my test for Figure 1, <br>
+and since both $D_f(t)$ and $\mathrm{Var}(\mathbb{E}(R_f(t)|R_f(t-\Delta)))$ depend on pointwise rank but not on pointwise magnitude values or additional differences, <br>
+based on $11$ observations at $p$ time points $\{0.1,...,1.0\}$, <br>
+where $10$ observations are constant and take $10$ different values, <br>
+$D_f(t)=0.217$ for all $t\in\{0.1,...,1.0\}$ with the shape components being $0.043$ and $0.050$ iteratively over time <br>
+doesn't seem to be possible for any $f$, <br>
+contrary to the result of "2.2 Properties of the total variation depth" of the paper.
+
+## 8
+
+The biggest differences between my Table 1 and the paper's Table 1 are:
+
+* MSS+TVD:
+  + Model 3 FPR:
+    - mine: $0.04(0.19)$, paper's: $0.25 (0.55)$,
+* MBD:
+  + Mode 5 TPR:
+    - mine: $64.29(17.48)$, paper's: $84.27(14.14)$,
+* ED:
+  + Model 5 TPR:
+    - mine: $62.4(18.83)$, paper's: $82.10(14.02)$.
+
+## 9
+
+My Figure 5 (a) has $34$ curves, <br>
+while the paper's Figure 5 (a) has $35$ curves.
+
+My Figure 5 (b) is slightly different from the paper's Figure 5 (b).
+
+My Figure 5.c has $1$ magnitude outlier, <br>
+while the paper's Figure 5.c has $2$ magniude outliers.
+
+Might the reason for these differences be that I used a slightly different dataset from the one the paper used?
+
+## 10
+
+Merging some of the loops, `apply()`, and `sapply()` would probably lead to better computation times.

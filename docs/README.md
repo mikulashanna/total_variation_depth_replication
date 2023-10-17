@@ -1,0 +1,2 @@
+[observations_and_questions.html](https://mikulashanna.github.io/total_variation_depth_replication/observations_and_questions.html)<br>
+[generate_output.html](https://mikulashanna.github.io/total_variation_depth_replication/generate_output.html)

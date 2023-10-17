@@ -1,0 +1,552 @@
+---
+title: "Generate Output"
+output: 
+  html_document: 
+    toc: true
+    fig_crop: no
+---
+
+<!-- horizontal scrollbar for code chunks -->
+<!-- source: Jeff Keller, SimonG, user2955884, Silverfish, & GISHuman. (2020, October 27). Missing horizontal scroll bar in R markdown HTML code chunks and output. Stack Overflow. https://stackoverflow.com/questions/36230790/missing-horizontal-scroll-bar-in-r-markdown-html-code-chunks-and-output -->
+```{css css,echo=FALSE}
+pre,code{white-space:pre!important;overflow-x:auto}
+```
+
+## Load Packages
+
+```{r load packages,message=FALSE}
+# install.packages("fda")
+# devtools::install_github("rmflight/knitrProgressBar")
+library(fda)
+library(knitrProgressBar)
+```
+
+## Load Functions
+
+```{r load functions}
+for(file in list.files(path="src",full.names=TRUE)){
+  source(file=file)
+}
+```
+
+## Set Seed
+
+```{r set seed}
+# consistent across all R versions
+# source: Phil, kangaroo_cliff, bschneidr, luchonacho, & cdermont. (2022, October 12). Is set.seed consistent over different versions of R (and ubuntu)?. Stack Overflow. https://stackoverflow.com/questions/47199415/is-set-seed-consistent-over-different-versions-of-r-and-ubuntu 
+set.seed(seed=1,sample.kind="Rounding")
+```
+
+## Figure 1
+
+```{r Figure 1}
+# data
+nonOutlierMatrix<-matrix(data=rep(x=seq(from=3.0,to=1.2,by=-0.2),times=10),nrow=10,ncol=10)
+pureMagnitudeOutlierMatrix<-matrix(data=rep(x=-3.0,times=10),nrow=1,ncol=10)
+pureShapeOutlierMatrix<-matrix(data=rep(x=c(1.6,2.4),times=5),nrow=1,ncol=10)
+shapeOutlierWithPartialMagnitudeOutlyingnessMatrix<-matrix(data=rep(x=c(2.0,-4.0),each=5),nrow=1,ncol=10)
+
+# data visualization and save figures and tables
+outliers<-list(pureMagnitudeOutlierMatrix,pureShapeOutlierMatrix,shapeOutlierWithPartialMagnitudeOutlyingnessMatrix)
+outlierColors<-c("blue","red","magenta")
+plotTitles<-c("Pure Magnitude Outlier","Pure Shape Outlier","Shape Outlier with Partial Magnitude Outlyingness")
+tableLegend<-c("f=pure magnitude outlier","f=pure shape outlier","f=shape outlier with partial mangitude outlyingness")
+ylim<-createylim(dataMatrix=rbind(nonOutlierMatrix,pureMagnitudeOutlierMatrix,pureShapeOutlierMatrix,shapeOutlierWithPartialMagnitudeOutlyingnessMatrix))
+originalOptions<-options()
+for(index in 1:3){
+  createFigure1(nonOutlierMatrix=nonOutlierMatrix,outlierMatrix=outliers[[index]],color=outlierColors[index],ylim=ylim,title=plotTitles[index])
+  plot<-recordPlot()
+  png(file=paste("output/figure_1/figure_1_",index,".png",sep=""))
+  replayPlot(x=plot)
+  invisible(x=dev.off())
+  table<-pointwiseVariationDepthOfOutlierFigure1(nonOutlierMatrix=nonOutlierMatrix,outlierMatrix=outliers[[index]],legend=list(tableLegend[index],"pointwiseMedian=pointwise median"))
+  options(width=100)
+  print(x=table)
+  capture.output(table,file=paste("output/figure_1/figure_1_",index,"_table.txt",sep=""))
+  options(width=originalOptions$width)
+}
+```
+
+Given the results of the test below, and <br>
+since both $D_f(t)$ and $Var(E(R_f(t)|R_f(t-\Delta)))$ depend on pointwise rank but not on pointwise magnitude values or additional differences, <br>
+based on $11$ observations at $p$ time points $\{0.1,...,1.0\}$, <br>
+where $10$ observations are constant and take $10$ different values, <br>
+$D_f(t)=0.217$ for all $t\in\{0.1,...,1.0\}$ with the shape components being $0.043$ and $0.050$ iteratively over time <br>
+doesn't seem to be possible for any $f$.
+
+```{r Figure 1 test,results="hold"}
+index<-2
+fRange<-seq(from=3.0,to=1.0,by=-0.2)
+options(width=90)
+for(ftOdd in fRange){
+  for(ftEven in fRange){
+    f<-matrix(data=rep(x=c(ftOdd,ftEven),times=5),nrow=1,ncol=10)
+    results<-pointwiseVariationDepthOfOutlierFigure1(nonOutlierMatrix=nonOutlierMatrix,outlierMatrix=f,legend=list(tableLegend[index],"pointwiseMedian=pointwise median"))$results
+    if((results["Var(R_f(t))",2]==0.217)|(results["Var(E(R_f(t)|R_f(t-Δ)))",2]==0.043)|(results["Var(E(R_f(t)|R_f(t-Δ)))",2]==0.050)){
+      print(x=list(ftOdd=ftOdd,ftEven=ftEven,results=results[c("Var(R_f(t))","Var(E(R_f(t)|R_f(t-Δ)))"),]))
+    }
+  }
+}
+options(width=originalOptions$width)
+```
+
+## Figures 2, 3, 4
+
+```{r Figures 2 3 4}
+# number of samples
+n<-100
+
+# number of time points
+p<-50
+
+# time row
+timeRow<-createTimeRow(p=p)
+
+# data
+sampleList<-list()
+outlierMatrix<-matrix(data=NA,nrow=7,ncol=p)
+for(modelNumber in 1:7){
+  samples<-match.fun(FUN=paste("createModel",modelNumber,"Samples",sep=""))(n=n,p=p)$samples
+  sampleList[[modelNumber]]<-samples
+  if(1<modelNumber){
+    functionalBoxplotMSSTVD<-createFunctionalBoxplotMSSTVD(dataMatrix=samples)
+  }
+  if(modelNumber==2){
+    outlierMatrix[modelNumber,]<-samples[functionalBoxplotMSSTVD$magnitudeOutlierIndicesInIncreasingOrderByTVD[1],]
+  }else if(2<modelNumber){
+    outlierMatrix[modelNumber,]<-samples[functionalBoxplotMSSTVD$shapeOutlierIndicesInIncreasingOrderByMSS[1],]
+  }
+}
+model7BaseSamples<-createModel7BaseSamples(n=n,p=p)$samples
+nonOutlierMatrix<-sampleList[[1]]
+dataMatrix<-rbind(nonOutlierMatrix,outlierMatrix[2:6,])
+ylim<-createylim(dataMatrix=dataMatrix)
+```
+
+According to the test below, <br>
+`createFunctionalBoxplotMSSTVD()` detects the same outliers as `detectOutlier()`, <br>
+even though the calculation of $TVD(f)$ might need to be modified in `detectOutlier()`.
+
+```{r Figures 2 3 4 test}
+# test
+sameOutliers<-TRUE
+for(modelNumber in 1:7){
+  samples<-sampleList[[modelNumber]]
+  functionalBoxplotMSSTVD<-createFunctionalBoxplotMSSTVD(dataMatrix=samples)
+  outlierIndicesTest<-detectOutlier(data=t(x=samples),nCurve=n,nPoint=p,empFactor=3)
+  shapeOutlierIndices<-sort(x=functionalBoxplotMSSTVD$shapeOutlierIndicesInIncreasingOrderByMSS)
+  shapeOutlierIndicesTest<-sort(x=outlierIndicesTest$sOut)
+  numberOfShapeOutlierIndices<-length(x=shapeOutlierIndices)
+  numberOfShapeOutlierIndicesTest<-length(x=shapeOutlierIndicesTest)
+  magnitudeOutlierIndices<-sort(x=functionalBoxplotMSSTVD$magnitudeOutlierIndicesInIncreasingOrderByTVD)
+  magnitudeOutlierIndicesTest<-sort(x=outlierIndicesTest$mOut)
+  numberOfMagnitudeOutlierIndices<-length(x=magnitudeOutlierIndices)
+  numberOfMagnitudeOutlierIndicesTest<-length(x=magnitudeOutlierIndicesTest)
+  if(numberOfShapeOutlierIndices!=0&numberOfShapeOutlierIndicesTest==0|(0<numberOfShapeOutlierIndices&0<numberOfShapeOutlierIndicesTest&!all(shapeOutlierIndices==shapeOutlierIndicesTest))|numberOfMagnitudeOutlierIndices!=0&numberOfMagnitudeOutlierIndicesTest==0|(0<numberOfMagnitudeOutlierIndices&0<numberOfMagnitudeOutlierIndicesTest&!all(magnitudeOutlierIndices==magnitudeOutlierIndicesTest))){
+    sameOutliers<-FALSE
+    break
+  }
+}
+print(x=sameOutliers)
+```
+
+### Figure 2 (c)
+
+```{r Figure 2 (c),fig.show="hold"}
+functionalBoxplotMSSTVD<-createFunctionalBoxplotMSSTVD(dataMatrix=dataMatrix,plot=TRUE,plotTitle="(c)")
+
+# save figure
+plot<-recordPlot()
+png(file="output/figure_2/figure_2_c.png")
+replayPlot(x=plot)
+invisible(x=dev.off())
+```
+
+### Figure 2 (a)
+
+```{r Figure 2 (a),fig.show="hold"}
+# plot non-outliers
+matplot(x=timeRow,y=t(x=nonOutlierMatrix),type="l",lty=1,pch=1,col="lightgrey",xlab="t",ylab="X(t)",ylim=ylim,main="(a)")
+
+# plot outliers
+outlierColors=c(NA,"red",rep(x="orange",times=4))
+for(outlierIndex in 2:6){
+  lines(x=timeRow,y=outlierMatrix[outlierIndex,],col=outlierColors[outlierIndex])
+}
+
+# plot functional median
+functionalMedianIndex<-functionalBoxplotMSSTVD$functionalMedianIndex
+functionalMedianRow<-dataMatrix[functionalMedianIndex,]
+lines(x=timeRow,y=functionalMedianRow)
+
+# save figure
+plot<-recordPlot()
+png(file="output/figure_2/figure_2_a.png")
+replayPlot(x=plot)
+invisible(x=dev.off())
+```
+
+### Figure 2 (b)
+
+```{r Figure 2 (b),fig.show="hold"}
+MSSfColumn<-createMSSfColumn(dataMatrix=dataMatrix)
+factor<-3
+boxplot(x=MSSfColumn,range=factor,col="white",medlwd=1,outpch=20,outcol="orange",ylab="MSS",main="(b)")
+
+# save figure
+plot<-recordPlot()
+png(file="output/figure_2/figure_2_b.png")
+replayPlot(x=plot)
+invisible(x=dev.off())
+```
+
+According to the test below, <br>
+the boxplots for $MSS(f,\Delta)$ values of `createMSSfColumn()` and `TVDMSS()` look identical.
+
+```{r Figure 2(b) test}
+# test
+n<-n+5
+MSSfColumn<-TVDMSS(data=t(x=dataMatrix),nCurve=n,nPoint=p)$MSS
+boxplot(x=MSSfColumn,range=factor,col="white",medlwd=1,outpch=20,outcol="orange",ylab="MSS",main="(b)")
+```
+
+### Figure 3 Top
+
+```{r Figure 3 Top,fig.show="hold"}
+# plot non-outliers
+matplot(x=timeRow,y=t(x=nonOutlierMatrix),type="l",lty=1,pch=1,col="lightgrey",xlab="t",ylab="X(t)",ylim=ylim)
+
+# plot outliers
+outlierColors=c(NA,"red","orange","blue","green","black")
+for(outlierIndex in 2:6){
+  lines(x=timeRow,y=outlierMatrix[outlierIndex,],col=outlierColors[outlierIndex])
+}
+
+# save figure
+plot<-recordPlot()
+png(file="output/figure_3/figure_3_top.png")
+replayPlot(x=plot)
+invisible(x=dev.off())
+```
+
+### Figure 3 Bottom
+
+```{r Figure 3 Bottom,fig.show="hold"}
+# plot non-oultiers
+outlier<-outlierMatrix[7,]
+ylim<-createylim(dataMatrix=rbind(model7BaseSamples,outlier))
+matplot(x=timeRow,y=t(x=model7BaseSamples),type="l",lty=1,pch=1,col="lightgrey",xlab="t",ylab="X(t)",ylim=ylim)
+
+# plot outlier
+lines(x=timeRow,y=outlier,col="purple")
+
+# save figure
+plot<-recordPlot()
+png(file="output/figure_3/figure_3_bottom.png")
+replayPlot(x=plot)
+invisible(x=dev.off())
+```
+
+### Figure 4
+
+```{r Figure 4,fig.show="hold"}
+depthVector=c("MBD","ED","MSSTVD")
+originalPar<-par()
+par(mfrow=c(6,3),mar=c(1.5,3,1,0.5))
+for(modelNumber in 2:7){
+  for(depth in depthVector){
+    createFigure4(dataMatrix=sampleList[[modelNumber]],depth=depth)
+    if(modelNumber==2){
+      if(depth=="MSSTVD"){
+        text<-"TVD+MSS"
+      }else{
+        text<-depth
+      }
+      mtext(side=1,text=text,line=-7,cex=0.5,font=2)
+    }
+    if(depth=="MBD"){
+      mtext(side=2,text=paste("Model",modelNumber),line=2,cex=0.5,font=2)
+    }
+  }
+}
+par(mfrow=originalPar$mfrow,mar=originalPar$mar)
+
+# save figure
+plot<-recordPlot()
+png(file="output/figure_4/figure_4.png")
+replayPlot(x=plot)
+invisible(x=dev.off())
+```
+
+## Table 1
+
+The code below takes approximately $3$ minutes to run on a 1.6 GHz Intel Core i5-8250U processor.
+
+```{r Table 1 chunk 1}
+# number of samples
+n<-100
+
+# number of time points
+p<-50
+
+# data
+resultsList<-list()
+progressBar<-progress_estimated(n=4*7,progress_location=file(description="progress/table_1_chunk_1.txt",open="w"))
+for(depthIndex in 1:4){
+  resultsListGivenDepth<-list()
+  for(modelNumber in 1:7){
+    update_progress(.pb=progressBar)
+    resultsListGivenDepthAndModel<-list()
+    for(experimentNumber in 1:500){
+      resultsListGivenDepthAndModel[[experimentNumber]]<-match.fun(FUN=paste("createModel",modelNumber,"Samples",sep=""))(n=n,p=p)
+    }
+    resultsListGivenDepth[[modelNumber]]<-resultsListGivenDepthAndModel
+  }
+  resultsList[[depthIndex]]<-resultsListGivenDepth
+}
+```
+
+The code below takes approximately $4$ hours and $30$ minutes to run on a 1.6 GHz Intel Core i5-8250U processor.
+
+```{r Table 1 chunk 2,results="hold"}
+# table and save table
+depthVector=c("MSSTVD","MBD","ED","MSS")
+table1<-matrix(data=NA,nrow=4,ncol=14)
+progressBar<-progress_estimated(n=4*7,progress_location=file(description="progress/table_1_chunk_2.txt",open="w"))
+for(depthIndex in 1:4){
+  depth<-depthVector[depthIndex]
+  for(modelNumber in 1:7){
+    update_progress(.pb=progressBar)
+    TPRVector<-c()
+    FPRVector<-c()
+    for(experimentNumber in 1:500){
+      results<-resultsList[[depthIndex]][[modelNumber]][[experimentNumber]]
+      trueOutlierIndices<-results$outlierIndices
+      numberOfTrueOutliers<-length(x=trueOutlierIndices)
+      samples<-results$samples
+      if(depth=="MSSTVD"){
+        functionalBoxplotMSSTVD<-createFunctionalBoxplotMSSTVD(dataMatrix=samples)
+        detectedOutlierIndices<-c(functionalBoxplotMSSTVD$shapeOutlierIndicesInIncreasingOrderByMSS,functionalBoxplotMSSTVD$magnitudeOutlierIndicesInIncreasingOrderByTVD)
+      }else if(depth=="MSS"){
+        detectedOutlierIndices<-detectOutlierIndicesBoxplot(dataMatrix=samples,depth=depth,factor=3)
+      }else{
+        detectedOutlierIndices<-createFunctionalBoxplot(dataMatrix=samples,depth=depth,factor=1.5)$outlierIndicesInIncreasingOrderByDepth
+      }
+      correctlyDetectedOutlierIndices<-intersect(x=trueOutlierIndices,y=detectedOutlierIndices)
+      numberOfCorrectlyDetectedOutliers<-length(x=correctlyDetectedOutlierIndices)
+      if(numberOfTrueOutliers==0){
+        TPR<-NA
+      }else{
+        TPR<-numberOfCorrectlyDetectedOutliers/numberOfTrueOutliers
+      }
+      TPRVector<-c(TPRVector,TPR)
+      numberOfTrueNonOutliers<-n-numberOfTrueOutliers
+      numberOfDetectedOutliers<-length(x=detectedOutlierIndices)
+      numberOfWronglyDetectedOutliers<-numberOfDetectedOutliers-numberOfCorrectlyDetectedOutliers
+      if(numberOfTrueNonOutliers==0){
+        FPR<-NA
+      }else{
+        FPR<-numberOfWronglyDetectedOutliers/numberOfTrueNonOutliers
+      }
+      FPRVector<-c(FPRVector,FPR)
+    }
+    TPRMean<-round(x=mean(x=TPRVector)*100,digits=2)
+    TPRStandardDeviation<-round(x=sd(x=TPRVector)*100,digits=2)
+    FPRMean<-round(x=mean(x=FPRVector)*100,digits=2)
+    FPRStandardDeviation<-round(x=sd(x=FPRVector)*100,digits=2)
+    table1[depthIndex,2*modelNumber-1]<-paste(TPRMean,"(",TPRStandardDeviation,")",sep="")
+    table1[depthIndex,2*modelNumber]<-paste(FPRMean,"(",FPRStandardDeviation,")",sep="")
+  }
+}
+colnames(x=table1)<-paste("Model",rep(x=1:7,each=2),rep(x=c("TPR","FPR"),times=7))
+rownames(x=table1)<-c("TVD+MSS",depthVector[-1])
+table<-noquote(obj=table1[,-1])
+options(width=100)
+print(x=table)
+capture.output(table,file=paste("output/table_1/table_1.txt",sep=""))
+options(width=originalOptions$width)
+```
+
+According to the test below, <br>
+`createFunctionalBoxplotMSSTVD()` has the same true positive and false positive rates as `detectOutlier()`, <br>
+`createFunctionalBoxplot()` has the same true positive and false positive rates as `fbplot()`, and <br>
+`detectOutlierIndicesBoxplot()` has the same true positive and false positive rates as `detectOutlier()`, <br>
+even though the calculation of $TVD(f)$ might need to be modified in `detectOutlier()`.<br><br>
+
+The code below takes approximately $6$ minutes to run on a 1.6 GHz Intel Core i5-8250U processor.
+
+```{r Table 1 test}
+# test
+table1Test<-matrix(data=NA,nrow=4,ncol=14)
+progressBar<-progress_estimated(n=4*7,progress_location=file(description="progress/table_1_test.txt",open="w"))
+for(depthIndex in 1:4){
+  if(depthIndex==3){
+    next
+  }
+  depth<-depthVector[depthIndex]
+  for(modelNumber in 1:7){
+    update_progress(.pb=progressBar)
+    TPRVector<-c()
+    FPRVector<-c()
+    for(experimentNumber in 1:500){
+      results<-resultsList[[depthIndex]][[modelNumber]][[experimentNumber]]
+      trueOutlierIndices<-results$outlierIndices
+      numberOfTrueOutliers<-length(x=trueOutlierIndices)
+      samples<-results$samples
+      if(depth=="MSSTVD"){
+        detectedOutlierIndices<-detectOutlier(data=t(x=samples),nCurve=n,nPoint=p,empFactor=3)$outlier
+      }else if(depth=="MBD"){
+        detectedOutlierIndices<-fbplot(fit=t(x=samples),plot=FALSE)$outpoint
+      }else if(depth=="MSS"){
+        detectedOutlierIndices<-detectOutlier(data=t(x=samples),nCurve=n,nPoint=p,empFactor=3)$sOut
+      }
+      correctlyDetectedOutlierIndices<-intersect(x=trueOutlierIndices,y=detectedOutlierIndices)
+      numberOfCorrectlyDetectedOutliers<-length(x=correctlyDetectedOutlierIndices)
+      if(numberOfTrueOutliers==0){
+        TPR<-NA
+      }else{
+        TPR<-numberOfCorrectlyDetectedOutliers/numberOfTrueOutliers
+      }
+      TPRVector<-c(TPRVector,TPR)
+      numberOfTrueNonOutliers<-n-numberOfTrueOutliers
+      numberOfDetectedOutliers<-length(x=detectedOutlierIndices)
+      numberOfWronglyDetectedOutliers<-numberOfDetectedOutliers-numberOfCorrectlyDetectedOutliers
+      if(numberOfTrueNonOutliers==0){
+        FPR<-NA
+      }else{
+        FPR<-numberOfWronglyDetectedOutliers/numberOfTrueNonOutliers
+      }
+      FPRVector<-c(FPRVector,FPR)
+    }
+    TPRMean<-round(x=mean(x=TPRVector)*100,digits=2)
+    TPRStandardDeviation<-round(x=sd(x=TPRVector)*100,digits=2)
+    FPRMean<-round(x=mean(x=FPRVector)*100,digits=2)
+    FPRStandardDeviation<-round(x=sd(x=FPRVector)*100,digits=2)
+    table1Test[depthIndex,2*modelNumber-1]<-paste(TPRMean,"(",TPRStandardDeviation,")",sep="")
+    table1Test[depthIndex,2*modelNumber]<-paste(FPRMean,"(",FPRStandardDeviation,")",sep="")
+  }
+}
+print(x=all(table1[-3,]==table1Test[-3,]))
+```
+
+## Figure 5
+
+```{r Figure 5}
+# data
+# source: Climate Prediction Center Internet Team. (2021, January 21). Monthly Atmospheric & Sea Surface Temperature Indices. Climate Prediction Center. https://www.cpc.ncep.noaa.gov/data/indices/sstoi.indices
+dataMatrix<-read.csv("data/figure_5_data.txt",sep="")
+firstIndex<-which(dataMatrix$YR==1982&dataMatrix$MON==7)
+lastIndex<-which(dataMatrix$YR==2016&dataMatrix$MON==6)
+yearMatrix<-matrix(data=dataMatrix[firstIndex:lastIndex,"YR"],ncol=12,byrow=TRUE)
+SSTMatrix<-matrix(data=dataMatrix[firstIndex:lastIndex,"NINO1.2"],ncol=12,byrow=TRUE)
+
+p<-12
+```
+
+### Figure 5 (c)
+
+```{r Figure 5 (c),fig.show="hold"}
+functionalBoxplotMSSTVD<-createFunctionalBoxplotMSSTVD(dataMatrix=SSTMatrix,plot=TRUE,plotTitle="(c)")
+
+# save figure
+plot<-recordPlot()
+png(file="output/figure_5/figure_5_c.png")
+replayPlot(x=plot)
+invisible(x=dev.off())
+```
+
+### Figure 5 (a)
+
+<!-- turn global device on for modifying plot across chunks -->
+<!-- source: Xie, Y., Dervieux, C., & Riederer, E. (2023, August 22). 14.5 Modify a plot in a previous code chunk. Chapman & Hall/CRC. https://bookdown.org/yihui/rmarkdown-cookbook/global-device.html -->
+```{r turn global device on, include=FALSE}
+knitr::opts_knit$set(global.device=TRUE)
+```
+
+```{r Figure 5 (a) chunk 1,fig.show="hide"}
+# plot data
+timeRow<-createTimeRow(p=p)
+ylim<-createylim(dataMatrix=SSTMatrix)
+matplot(x=timeRow,y=t(x=SSTMatrix),type="l",lty=1,col="lightgrey",xlab="month",ylab="SST",ylim=ylim,xaxt="n",main="(a)")
+axis(side=1,at=c(0.25,0.5,0.75,1),labels=c(9,12,3,6))
+```
+
+According to the test below, <br>
+my Figure 5 (a) has $34$ curves, <br>
+while the paper's Figure 5 (a) has $35$ curves, <br>
+and I'm not sure about the reason for the difference.
+
+```{r Figure 5 (a) test 1,fig.keep="none"}
+# test
+n<-nrow(x=SSTMatrix)
+print(x=n)
+```
+
+```{r Figure 5 (a) chunk 2,fig.show="hide"}
+# plot magnitude outliers
+magnitudeOutlierIndices<-functionalBoxplotMSSTVD$magnitudeOutlierIndicesInIncreasingOrderByTVD
+magnitudeOutliers<-SSTMatrix[magnitudeOutlierIndices,]
+lines(x=timeRow,y=magnitudeOutliers,col="red")
+arrows(x0=0.25,y0=27.5,x1=0.5,y1=SSTMatrix[magnitudeOutlierIndices,6],length=0.1)
+text(x=0.25,y=28.75,labels=paste(yearMatrix[magnitudeOutlierIndices,1],"-",yearMatrix[magnitudeOutlierIndices,12]))
+```
+
+According to the test below, <br>
+`createFunctionalBoxplotMSSTVD()` detects the same magnitude outliers as `detectOutlier()`.
+
+```{r Figure 5 (a) test 2,fig.keep="none"}
+# test
+sort(x=magnitudeOutlierIndices)==sort(x=detectOutlier(data=t(x=SSTMatrix),nCurve=n,nPoint=p,empFactor=3)$mOut)
+```
+
+```{r Figure 5 (a) chunk 3,fig.show="hold"}
+# plot green line
+greenLineIndex<-which(x=yearMatrix[,1]==1983)
+greenLine<-SSTMatrix[greenLineIndex,]
+lines(x=timeRow,y=greenLine,col="green")
+
+# plot purple line
+purpleLineIndex<-which(x=yearMatrix[,1]==2015)
+purpleLine<-SSTMatrix[purpleLineIndex,]
+lines(x=timeRow,y=purpleLine,col="purple")
+
+# plot functional median
+functionalMedianIndex<-functionalBoxplotMSSTVD$functionalMedianIndex
+functionalMedian<-SSTMatrix[functionalMedianIndex,]
+lines(x=timeRow,y=functionalMedian)
+
+# save figure
+plot<-recordPlot()
+png(file="output/figure_5/figure_5_a.png")
+replayPlot(x=plot)
+invisible(x=dev.off())
+```
+
+<!-- turn global device off for modifying plot across chunks -->
+<!-- source: Xie, Y., Dervieux, C., & Riederer, E. (2023, August 22). 14.5 Modify a plot in a previous code chunk. Chapman & Hall/CRC. https://bookdown.org/yihui/rmarkdown-cookbook/global-device.html -->
+```{r turn global device off,include=FALSE}
+knitr::opts_knit$set(global.device=FALSE)
+```
+
+### Figure 5 (b)
+
+```{r Figure 5 (b),fig.show="hold"}
+MSSfColumn<-createMSSfColumn(dataMatrix=SSTMatrix)
+factor<-3
+boxplot(x=MSSfColumn,range=factor,col="white",medlwd=1,ylab="MSS",main="(b)")
+
+# save figure
+plot<-recordPlot()
+png(file="output/figure_5/figure_5_b.png")
+replayPlot(x=plot)
+invisible(x=dev.off())
+```
+
+According to the test below, <br>
+the boxplots for $MSS(f,\Delta)$ values of `createMSSfColumn()` and `TVDMSS()` look identical.
+
+```{r Figure 5 (b) test}
+# test
+MSSfColumn<-TVDMSS(data=t(x=SSTMatrix),nCurve=n,nPoint=p)$MSS
+boxplot(x=MSSfColumn,range=factor,col="white",medlwd=1,ylab="MSS",main="(b)")
+```
